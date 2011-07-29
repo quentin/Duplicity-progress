@@ -1,3 +1,18 @@
-Provides progression feedback of a running duplicity[1] process.
+Provides progression feedback for the duplicity[1] tool.
+
+Usage:
+  duplicity-progress <duplicity-args>
+  duplicity-progress <options> -- <duplicity-args>
+
+  <options>
+    --super-dry   Always run duplicity in dry-mode
+
+  <duplicity-args>
+    Refer to the duplicity documentation.
+    Duplicity-tool will automaticaly add the "--vinfo" argument.
+
+
+
+
 
 [1] http://duplicity.nongnu.org/

@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+
+$:.unshift File.dirname(__FILE__) + '/../lib'
+require 'duprogress'
+include DuplicityProgress
+
+my_args = []
+duplicity_args = []
+if ARGV.include? "--"
+  my_args = ARGV[0 .. ARGV.find_index("--")-1]
+  duplicity_args = ARGV[ARGV.find_index("--")+1 .. -1]
+else
+  duplicity_args = ARGV[0 .. -1]
+end
+
+if(my_args.include? "--super-dry")
+  Duplicity.super_dry(true)
+end
+
+duplicity = Duplicity.new(duplicity_args)
+
+# dry-run and store expected operations
+expected = duplicity.inject_dry_run([]){|ops,kind,arg| ops.push([kind,arg])}
+
+# real-run and count expected operations processed
+duplicity.inject_run(0){|count,kind,arg| 
+  if expected.delete([kind,arg])
+    count += 1
+    puts "#{count} / #{count + expected.size}"
+  end
+  count
+}
+
+

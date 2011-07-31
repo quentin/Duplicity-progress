@@ -1,20 +1,20 @@
 module DuplicityProgress
   class BlockListener
-    def initialize block, inject = false, object = nil
+    def initialize block, inject = false, memo = nil
       @block = block
-      @result = object
+      @memo = memo 
       @inject = inject
     end
 
     def result
-      @result
+      @memo
     end
 
-    def event kind, arg
+    def event e 
       if @inject
-        @result = @block.call(@result, kind, arg)
+        @memo = @block.call(@memo, e)
       else
-        @result = @block.call(kind, arg)
+        @memo = @block.call(e)
       end
     end
   end

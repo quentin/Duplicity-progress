@@ -13,7 +13,7 @@ module DuplicityProgress
       @args = args.dup
     end
 
-    def add_listener listener
+    def add_listener listener, options={}
       @listeners.add listener
       self
     end
@@ -49,11 +49,33 @@ module DuplicityProgress
       block_listener = (block.nil? ? nil : BlockListener.new(block,inject,object))
       add_listener(block_listener) if block_listener
 
-      args = prepare_args(dry, @args)
-      IO.popen(args.join(" ")) do |io|
-        io.each_line do |line|
+      # log pipe
+      log_r,log_w = IO.pipe
+      begin
+        args = prepare_args(dry, log_w.fileno, @args)
+        Kernel.fork {
+          # mute stdout and stderr to /dev/null
+          origins = [$stdout,$stderr]
+          $stderr = $stdout = File.new("/dev/null","w")
+          origins.each{|io| io.close}
+          # close log pipe reading-end
+          log_r.close
+
+          Kernel.exec(*args)
+          throw "Kernl.exec error"
+        }
+        # close log-pipe writing-end
+        log_w.close
+
+        @event = nil
+        log_r.each_line do |line|
           process_line line
         end
+        broadcast
+
+      ensure
+        log_r.close
+        log_w.close unless log_w.closed?
       end
 
       if block_listener
@@ -65,25 +87,54 @@ module DuplicityProgress
       remove_listener(block_listener) if block_listener 
     end
 
-    def prepare_args dry, args
-      before = ["duplicity","-vinfo"] + ((dry || @@super_dry)  ? ["--dry-run"] : [])
-      after = ["2>&1"]
+    def prepare_args dry, logfd, args
+      before = ["duplicity","-vdebug","--log-fd=#{logfd}"] + ((dry || @@super_dry)  ? ["--dry-run"] : [])
+      after = []
       before + args + after
     end
 
     def process_line line
-      case line 
-      when /^([ADM]) (.+)$/
-        broadcast $1.to_sym, $2
+      case line
+      when /^$/
+        broadcast
+
+      when /^(NOTICE|INFO|WARNING|DEBUG) ([0-9]+) (.+)$/
+        @event = Event.new($1.to_sym, $2.to_i, $3)
+      
+      when /^(NOTICE|INFO|WARNING|DEBUG) ([0-9]+)[ ]*$/
+        @event = Event.new($1.to_sym, $2.to_i)
+
+      when /^([^\.].*)$/
+        m = $1
+        if @event.arg.nil?
+          @event.arg = m
+        else
+          @event.arg.concat("\n").concat(m)
+        end
+
+      when /^\. (.*)$/
+        m = $1
+        if @event.message.nil?
+          @event.message = $1
+        else
+          @event.message.concat("\n").concat(m)
+        end
+
+      else
+        throw "unmatched line"
       end
     end
 
-    def broadcast kind, arg
+    def broadcast
+      return if @event.nil?
+      @event.freeze
       @listeners.each do |listener|
         if listener.respond_to?(:event)
-          listener.event(kind, arg)
+          listener.event(@event)
         end
       end
+    ensure
+      @event = nil
     end
   end
 end

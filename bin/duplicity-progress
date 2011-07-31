@@ -20,11 +20,16 @@ end
 duplicity = Duplicity.new(duplicity_args)
 
 # dry-run and store expected operations
-expected = duplicity.inject_dry_run([]){|ops,kind,arg| ops.push([kind,arg])}
+expected = duplicity.inject_dry_run([]){|ops,event| 
+  if event.major == :INFO && event.minor == 4
+    ops.push([event.major,event.minor,event.arg])
+  end
+  ops
+}
 
 # real-run and count expected operations processed
-duplicity.inject_run(0){|count,kind,arg| 
-  if expected.delete([kind,arg])
+duplicity.inject_run(0){|count,event| 
+  if expected.delete([event.major,event.minor,event.arg])
     count += 1
     puts "#{count} / #{count + expected.size}"
   end

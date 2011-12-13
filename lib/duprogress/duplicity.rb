@@ -55,9 +55,7 @@ module DuplicityProgress
         args = prepare_args(dry, log_w.fileno, @args)
         Kernel.fork {
           # mute stdout and stderr to /dev/null
-          origins = [$stdout,$stderr]
-          $stderr = $stdout = File.new("/dev/null","w")
-          origins.each{|io| io.close}
+          [$stdout,$stderr].each{|io| io.reopen(File.new("/dev/null","w"))}
           # close log pipe reading-end
           log_r.close
 
@@ -98,10 +96,10 @@ module DuplicityProgress
       when /^$/
         broadcast
 
-      when /^(NOTICE|INFO|WARNING|DEBUG) ([0-9]+) (.+)$/
+      when /^(NOTICE|INFO|WARNING|DEBUG|ERROR) ([0-9]+) (.+)$/
         @event = Event.new($1.to_sym, $2.to_i, $3)
       
-      when /^(NOTICE|INFO|WARNING|DEBUG) ([0-9]+)[ ]*$/
+      when /^(NOTICE|INFO|WARNING|DEBUG|ERROR) ([0-9]+)[ ]*$/
         @event = Event.new($1.to_sym, $2.to_i)
 
       when /^([^\.].*)$/

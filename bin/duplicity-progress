@@ -19,20 +19,42 @@ end
 
 duplicity = Duplicity.new(duplicity_args)
 
+@output = {:done => 0, :total => 0, :progress => 0}
+def update_output hash = {}
+  @output.merge!(hash)
+  STDOUT.write "\r updates:#{@output[:done]}/#{@output[:total]} transfered:#{@output[:progress]}%\r"
+end
+
 # dry-run and store expected operations
+last_progress = nil
 expected = duplicity.inject_dry_run([]){|ops,event| 
   if event.major == :INFO && event.minor == 4
     ops.push([event.major,event.minor,event.arg])
+  elsif event.major == :INFO && event.minor == 2
+    last_progress = event.arg.to_i
+  elsif event.major == :ERROR
+    puts event.message    
   end
   ops
 }
+
+update_output :total => expected.size
 
 # real-run and count expected operations processed
 duplicity.inject_run(0){|count,event| 
   if expected.delete([event.major,event.minor,event.arg])
     count += 1
-    puts "#{count} / #{count + expected.size}"
+    update_output :done => count
+  elsif event.major == :INFO && event.minor == 2
+    progress = event.arg.to_i
+    if last_progress
+      pgress = ((progress*100) / last_progress)
+      update_output :progress => pgress
+    end
+  elsif event.major == :ERROR
+    puts event.message    
   end
+
   count
 }
 
